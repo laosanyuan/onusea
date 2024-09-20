@@ -32,9 +32,14 @@ def get_ai_images(coze_token: str, flow_id: str) -> list[str]:
             session.trust_env = False
             response = session.post(url, headers=headers, json=payload)
             response.raise_for_status()
-            tmp_json = json.loads(response.json()['data'])
-            seasons = ['spring', 'summer', 'autumn', 'winter']
-            result.extend(tmp_json[season] for season in seasons)
+
+            content = response.json()
+            if 'data' in content:
+                tmp_json = json.loads(content['data'])
+                seasons = ['spring', 'summer', 'autumn', 'winter']
+                result.extend(tmp_json[season] for season in seasons)
+            else:
+                print(content['text'])
     except requests.exceptions.RequestException as e:
         print(f'API调用失败: {e}')
 
@@ -60,7 +65,7 @@ def merge_transition_videos(video_files: list[str],  out_path: str) -> None:
             tmp_video_path = f'{tmp_folder}/{time.strftime("%Y%m%d_%H%M%S")}.mp4'
             tmp_transition = random.choice(transitions)
             # 添加音频流处理
-            cmd = f'ffmpeg -i "{current_video}" -i "{video_file}" -filter_complex "xfade=transition={tmp_transition}:duration=1:offset={current_offset},format=yuv420p,setpts=N/FRAME_RATE/TB" -c:v libx264 -preset slow -crf 22 -c:a aac -b:a 192k -y "{tmp_video_path}"'
+            cmd = f'ffmpeg -i "{current_video}" -i "{video_file}" -filter_complex "xfade=transition={tmp_transition}:duration=1:offset={current_offset},format=yuv420p,setpts=N/FRAME_RATE/TB" -c:v libx264 -preset slow -crf 22 -c:a aac -b:a 192k -y "{tmp_video_path}"'  # 修改持续时间为2秒
             subprocess.run(cmd, shell=True, check=True)
 
             current_offset += 4
@@ -94,6 +99,10 @@ def add_bgm(input_path: str, output_path: str):
         segment = segment.fade_in(fade_in_duration).fade_out(fade_out_duration)
 
         combined_audio += segment
+
+    bgm_audio = AudioSegment.from_file('./resources/bgm/bgm.mp3')
+    bgm_audio = bgm_audio.apply_gain(-15)
+    combined_audio = combined_audio.overlay(bgm_audio)
 
     combined_audio.export(tmp_mp3, format='mp3')
 

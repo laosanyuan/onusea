@@ -24,7 +24,7 @@ class VideoSpringGenerator(BaseSeasonGenerator):
                 [1:v]scale=-1:{height},crop={width}:{height},split=2[mask1][mask2];\
                 [mask1][mask2]alphamerge,format=rgba,colorchannelmixer=1:1:1:0:1:1:1:0:1:1:1:0:0:0:0:1.5[mask];\
                 [0:v][mask]overlay;\
-                " -t {duration} -y "{output_path}"'
+                " -an -t {duration} -y "{output_path}"'
             subprocess.run(cmd, shell=True, check=True)
         finally:
             if os.path.exists(ai_image):
