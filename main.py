@@ -44,7 +44,7 @@ def get_ai_images(coze_token: str, flow_id: str) -> list[str]:
 def merge_transition_videos(video_files: list[str],  out_path: str) -> None:
     """合并多个视频并在拼接处添加转场效果"""
 
-    transitions = ['fade', 'smoothleft', 'smoothright', 'smoothup', 'smoothdown', 'circleopen', 'circleclose',
+    transitions = ['smoothleft', 'smoothright', 'smoothup', 'smoothdown', 'circleopen', 'circleclose',
                    'vertopen', 'vertclose', 'horzopen', 'horzclose', 'dissolve', 'pixelize', 'diagtl', 'diagtr', 'diagbl', 'diagbr']
 
     tmp_folder = 'merge_folder'
