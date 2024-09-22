@@ -9,7 +9,7 @@ from utils.video_utils import get_duration
 
 class VideoAutumnGenerator(BaseSeasonGenerator):
 
-    def generate(self, url: str, output_path: str, duration: float = 5) -> bool:
+    def generate(self, url: str, output_path: str, duration: float = 2.5) -> bool:
         ai_image = self._save_ai_image(url)
         if not ai_image or not os.path.exists(ai_image):
             return False

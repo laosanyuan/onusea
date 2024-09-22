@@ -58,7 +58,7 @@ def merge_transition_videos(video_files: list[str],  out_path: str) -> None:
     os.makedirs(tmp_folder, exist_ok=True)
 
     try:
-        current_offset = 3
+        current_offset = 1.5
         current_video = video_files[0]
         for i, video_file in enumerate(video_files):
             if i == 0:
@@ -67,10 +67,10 @@ def merge_transition_videos(video_files: list[str],  out_path: str) -> None:
             tmp_video_path = f'{tmp_folder}/{time.strftime("%Y%m%d_%H%M%S")}.mp4'
             tmp_transition = random.choice(transitions)
             # 添加音频流处理
-            cmd = f'ffmpeg -i "{current_video}" -i "{video_file}" -filter_complex "xfade=transition={tmp_transition}:duration=1:offset={current_offset},format=yuv420p,setpts=N/FRAME_RATE/TB" -c:v libx264 -preset slow -crf 22 -c:a aac -b:a 192k -y "{tmp_video_path}"'  # 修改持续时间为2秒
+            cmd = f'ffmpeg -i "{current_video}" -i "{video_file}" -filter_complex "xfade=transition={tmp_transition}:duration=0.5:offset={current_offset},format=yuv420p,setpts=N/FRAME_RATE/TB" -c:v libx264 -preset slow -crf 22 -c:a aac -b:a 192k -y "{tmp_video_path}"'
             subprocess.run(cmd, shell=True, check=True)
 
-            current_offset += 4
+            current_offset += 2
             current_video = tmp_video_path
 
         shutil.copyfile(current_video, out_path)
@@ -88,16 +88,16 @@ def add_bgm(input_path: str, output_path: str):
 
     tmp_mp3 = 'tmp_bgm.mp3'
     for index, audio_file in enumerate(audio_files):
-        duration = 4000
+        duration = 2000
         if index == 0 or index == len(audio_files)-1:
-            duration = 3500
+            duration = 1750
         audio = AudioSegment.from_file(audio_file)
         start_time = random.randint(0, len(audio) - duration)
         segment = audio[start_time:start_time + duration]
 
         # 添加渐入渐出效果
-        fade_in_duration = 300  # 渐入时长
-        fade_out_duration = 300  # 渐出时长
+        fade_in_duration = 100  # 渐入时长
+        fade_out_duration = 100  # 渐出时长
         segment = segment.fade_in(fade_in_duration).fade_out(fade_out_duration)
 
         combined_audio += segment
