@@ -16,7 +16,8 @@ from season_generator.video_winter_generator import VideoWinterGenerator
 
 
 def get_ai_images(coze_token: str, flow_id: str) -> list[str]:
-    result = []
+    images = []
+    title = ''
 
     url = 'https://api.coze.cn/v1/workflow/run'
     headers = {
@@ -37,13 +38,14 @@ def get_ai_images(coze_token: str, flow_id: str) -> list[str]:
             if 'data' in content:
                 tmp_json = json.loads(content['data'])
                 seasons = ['spring', 'summer', 'autumn', 'winter']
-                result.extend(tmp_json[season] for season in seasons)
+                images.extend(tmp_json[season] for season in seasons)
+                title = tmp_json['title']
             else:
                 print(content['text'])
     except requests.exceptions.RequestException as e:
         print(f'API调用失败: {e}')
 
-    return result
+    return (images, title)
 
 
 def merge_transition_videos(video_files: list[str],  out_path: str) -> None:
@@ -125,7 +127,7 @@ if __name__ == '__main__':
     while (True):
         index += 1
 
-        images = get_ai_images(config.coze_token, config.coze_flow_id)
+        images, title = get_ai_images(config.coze_token, config.coze_flow_id)
         if not images:
             raise ValueError('没有获取到有效图片')
 
@@ -141,7 +143,7 @@ if __name__ == '__main__':
         tmp_transition = f'{tmp_folder}/transition.mp4'
         merge_transition_videos(tmp_videos, tmp_transition)
 
-        output = f'{config.output_folder}/{time.strftime("%Y%m%d_%H%M%S")}.mp4'
+        output = f'{config.output_folder}/{time.strftime("%Y%m%d_%H%M%S")}#{title}.mp4'
         add_bgm(tmp_transition, output)
         print(f'生成成功：{output}')
 
