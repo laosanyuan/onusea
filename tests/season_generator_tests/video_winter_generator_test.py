@@ -11,7 +11,7 @@ class TestVideoWinterGenerator(unittest.TestCase):
     def setUp(self):
         self._tmp_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp_folder')
         os.makedirs(self._tmp_folder, exist_ok=True)
-        self._tmp_image = os.path.join(self._tmp_folder, 'tmp_image.jpg')
+        self._tmp_image = os.path.join(self._tmp_folder, 'winter.jpg')
         shutil.copy(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../resources/test_image.jpg'), self._tmp_image)
 
     @patch('season_generator.video_winter_generator.VideoWinterGenerator._save_ai_image')
