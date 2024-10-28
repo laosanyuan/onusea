@@ -16,6 +16,10 @@ class Config:
         return self._config.get('coze_flow_id', '')
 
     @property
+    def coze_robot_id(self) -> str:
+        return self._config.get('coze_robot_id', '')
+
+    @property
     def output_folder(self) -> str:
         return self._config.get('output_folder', '')
 

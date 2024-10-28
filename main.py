@@ -1,23 +1,17 @@
 import json
 import requests
-import random
-import subprocess
 import shutil
 import os
 import time
 
-from pydub import AudioSegment
-
 from config_parser import config
-from season_generator.video_spring_generator import VideoSpringGenerator
-from season_generator.video_summer_generator import VideoSummerGenerator
-from season_generator.video_autumn_generator import VideoAutumnGenerator
-from season_generator.video_winter_generator import VideoWinterGenerator
+from utils.video_utils import add_bgm, splicing_video, add_decoration
 
 
-def get_ai_images(coze_token: str, flow_id: str) -> list[str]:
+def get_ai_images(coze_token: str, coze_robot_id: str, flow_id: str, index: int, input_image: str = '') -> tuple[list[str], str, str]:
     images = []
     title = ''
+    model_image = None
 
     url = 'https://api.coze.cn/v1/workflow/run'
     headers = {
@@ -26,6 +20,11 @@ def get_ai_images(coze_token: str, flow_id: str) -> list[str]:
     }
     payload = {
         'workflow_id': flow_id,
+        'bot_id': coze_robot_id,
+        'parameters': {
+            'index': index,
+            'model_image': input_image
+        },
     }
     try:
         with requests.Session() as session:
@@ -37,114 +36,50 @@ def get_ai_images(coze_token: str, flow_id: str) -> list[str]:
             content = response.json()
             if 'data' in content:
                 tmp_json = json.loads(content['data'])
-                seasons = ['spring', 'summer', 'autumn', 'winter']
-                images.extend(tmp_json[season] for season in seasons)
+                images.extend(tmp_json['images'])
                 title = tmp_json['title']
+                model_image = tmp_json['model_image']
             else:
-                print(content['text'])
+                print(content['msg'])
     except requests.exceptions.RequestException as e:
         print(f'API调用失败: {e}')
 
-    return (images, title)
-
-
-def merge_transition_videos(video_files: list[str],  out_path: str) -> None:
-    """合并多个视频并在拼接处添加转场效果"""
-
-    transitions = ['smoothleft', 'smoothright', 'smoothup', 'smoothdown', 'circleopen', 'circleclose',
-                   'vertopen', 'vertclose', 'horzopen', 'horzclose', 'dissolve', 'pixelize', 'diagtl', 'diagtr', 'diagbl', 'diagbr']
-
-    tmp_folder = 'merge_folder'
-    os.makedirs(tmp_folder, exist_ok=True)
-
-    try:
-        current_offset = 1.5
-        current_video = video_files[0]
-        for i, video_file in enumerate(video_files):
-            if i == 0:
-                continue
-
-            tmp_video_path = f'{tmp_folder}/{time.strftime("%Y%m%d_%H%M%S")}.mp4'
-            tmp_transition = random.choice(transitions)
-            # 添加音频流处理
-            cmd = f'ffmpeg -i "{current_video}" -i "{video_file}" -filter_complex "xfade=transition={tmp_transition}:duration=0.5:offset={current_offset},format=yuv420p,setpts=N/FRAME_RATE/TB" -c:v libx264 -preset slow -crf 22 -c:a aac -b:a 192k -y "{tmp_video_path}"'
-            subprocess.run(cmd, shell=True, check=True)
-
-            current_offset += 2
-            current_video = tmp_video_path
-
-        shutil.copyfile(current_video, out_path)
-    finally:
-        shutil.rmtree(tmp_folder, ignore_errors=True)
-
-
-def add_bgm(input_path: str, output_path: str):
-    audio_files = ['./resources/bgm/spring.mp3',
-                   './resources/bgm/summer.mp3',
-                   './resources/bgm/autumn.mp3',
-                   './resources/bgm/winter.mp3']
-
-    combined_audio = AudioSegment.silent(duration=0)
-
-    tmp_mp3 = 'tmp_bgm.mp3'
-    for index, audio_file in enumerate(audio_files):
-        duration = 2000
-        if index == 0 or index == len(audio_files)-1:
-            duration = 1750
-        audio = AudioSegment.from_file(audio_file)
-        start_time = random.randint(0, len(audio) - duration)
-        segment = audio[start_time:start_time + duration]
-
-        # 添加渐入渐出效果
-        fade_in_duration = 100  # 渐入时长
-        fade_out_duration = 100  # 渐出时长
-        segment = segment.fade_in(fade_in_duration).fade_out(fade_out_duration)
-
-        combined_audio += segment
-
-    bgm_audio = AudioSegment.from_file('./resources/bgm/bgm.mp3')
-    bgm_audio = bgm_audio.apply_gain(-15)
-    combined_audio = combined_audio.overlay(bgm_audio)
-
-    combined_audio.export(tmp_mp3, format='mp3')
-
-    cmd = f'ffmpeg -i "{input_path}" -i "{tmp_mp3}" -map 0:v -map 1:a -c:v copy -c:a aac -shortest "{output_path}" -y'
-    subprocess.run(cmd, shell=True, check=True)
-
-    if os.path.exists(tmp_mp3):
-        os.remove(tmp_mp3)
+    return (images, title, model_image)
 
 
 if __name__ == '__main__':
-    seasons = {
-        'spring': VideoSpringGenerator(),
-        'summer': VideoSummerGenerator(),
-        'autumn': VideoAutumnGenerator(),
-        'winter': VideoWinterGenerator()
-    }
-
     index = 0
     while (True):
         index += 1
 
-        images, title = get_ai_images(config.coze_token, config.coze_flow_id)
-        if not images:
-            raise ValueError('没有获取到有效图片')
+        images = []
+        title = ''
+        try_times = 0
+        input_image = ''
+        while len(images) < 12:
+            print(f"调用coze接口，尝试次数：{try_times+1}")
+            tmp_images, title, model_image = get_ai_images(config.coze_token, config.coze_robot_id, config.coze_flow_id, len(images), input_image)
+            tmp_images = [img for img in tmp_images if img.strip()]
+            images.extend(tmp_images)
+            if model_image:
+                input_image = model_image
+            try_times += 1
+            if try_times > 10:
+                raise ValueError('连续调用coze接口失败')
 
         tmp_folder = 'tmp_main_folder'
         os.makedirs(tmp_folder, exist_ok=True)
+        # 合并图片
+        tmp_splicing = f'{tmp_folder}/tmp_splicing.mp4'
+        splicing_video(images, tmp_splicing)
 
-        tmp_videos = []
-        for index, (season, generator) in enumerate(seasons.items()):
-            tmp_video = f'{tmp_folder}/tmp_{season}.mp4'
-            generator.generate(images[index], tmp_video)
-            tmp_videos.append(tmp_video)
+        # 添加画面装饰
+        tmp_decoration = f'{tmp_folder}/decoration.mp4'
+        add_decoration(tmp_splicing, tmp_decoration)
 
-        tmp_transition = f'{tmp_folder}/transition.mp4'
-        merge_transition_videos(tmp_videos, tmp_transition)
-
+        # 添加音频
         output = f'{config.output_folder}/{time.strftime("%Y%m%d_%H%M%S")}#{title}.mp4'
-        add_bgm(tmp_transition, output)
+        add_bgm(tmp_decoration, output)
         print(f'生成成功：{output}')
 
         if os.path.exists(tmp_folder):
