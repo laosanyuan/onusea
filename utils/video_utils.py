@@ -1,11 +1,15 @@
 import subprocess
-import cv2
+import io
 import os
 import shutil
 import random
-from pydub import AudioSegment
-import requests
+import time
 from datetime import datetime
+
+import requests
+import cv2
+from pydub import AudioSegment
+from PIL import Image
 
 
 def get_video_duration(file_path: str) -> float:
@@ -51,26 +55,6 @@ def add_decoration(input_path: str, output_path: str):
     subprocess.run(cmd, shell=True, check=True)
 
 
-def merge_transition_videos(video_files: list[str], out_path: str) -> None:
-    """直接拼接多个视频"""
-
-    tmp_folder = 'merge_folder'
-    os.makedirs(tmp_folder, exist_ok=True)
-
-    try:
-        video_list_file = f'{tmp_folder}/video_list.txt'
-        with open(video_list_file, 'w') as f:
-            for video_file in video_files:
-                video_file = os.path.relpath(video_file, start=tmp_folder)
-                f.write(f"file '{video_file}'\n")
-
-        cmd = f'ffmpeg -f concat -safe 0 -i "{video_list_file}" -c copy -y "{out_path}"'
-        subprocess.run(cmd, shell=True, check=True)
-
-    finally:
-        shutil.rmtree(tmp_folder, ignore_errors=True)
-
-
 def add_bgm(input_path: str, output_path: str):
     audio_files = ['./resources/bgm/spring.mp3',
                    './resources/bgm/summer.mp3',
@@ -106,40 +90,65 @@ def add_bgm(input_path: str, output_path: str):
         os.remove(tmp_mp3)
 
 
-def splicing_video(images: list[str], output_path: str):
-    """拼接图片为视频"""
+def merge_transition_videos(video_files: list[str],  out_path: str, part_duration: float = 0.6, transition_duration: float = 0.15) -> None:
+    """合并多个图片并在拼接处添加渐变转场效果"""
+    edge_duration = part_duration + (transition_duration/2)
+    normal_duration = part_duration + transition_duration
 
-    tmp_folder = 'tmp_splicing_folder'
-    if os.path.exists(tmp_folder):
-        shutil.rmtree(tmp_folder)
+    tmp_folder = 'merge_folder'
     os.makedirs(tmp_folder, exist_ok=True)
 
+    mp3 = "./resources/bgm/spring.mp3"
+    current_video = None
     try:
-        image_list_file = f'{tmp_folder}/image_list.txt'
-        with open(image_list_file, 'w') as f:
-            for image in images:
-                tmp_image = _save_ai_image(image, tmp_folder)
-                tmp_image = os.path.basename(tmp_image)
-                f.write(f"file '{tmp_image}'\n")
-                f.write("duration 0.6\n")
-        cmd = f'ffmpeg -f concat -safe 0 -i "{image_list_file}" -vf "setpts=PTS-STARTPTS" -pix_fmt yuv420p -c:v libx264 -preset slow -crf 22 -r 30 "{output_path}" -y'
-        subprocess.run(cmd, shell=True, check=True)
+        for i in range(len(video_files)-1, -1, -1):
+            tmp_video_path = f'{tmp_folder}/part_{i}.mp4'
+            tmp_image_path = _save_ai_image(video_files[i], tmp_folder)
+            tmp_duration = edge_duration if i == len(video_files) - 1 or i == 0 else normal_duration
+            cmd = f'ffmpeg -loop 1 -i "{tmp_image_path}" -t {tmp_duration} -vf "setpts=PTS-STARTPTS" -r 30 -pix_fmt yuv420p -c:v libx264 -preset slow -crf 22 "{tmp_video_path}" -y'
+            subprocess.run(cmd, shell=True, check=True)
+            if i == len(video_files)-1:
+                current_video = tmp_video_path
+                continue
+            current_video_path = f'{tmp_folder}/current_video_{i}.mp4'
+            cmd = f'ffmpeg -i "{tmp_video_path}" -i "{current_video}" -filter_complex "xfade=transition=fade:duration={transition_duration}:offset={tmp_duration - transition_duration},format=yuv420p,setpts=PTS-STARTPTS" -c:v libx264 -preset slow -crf 22 -c:a aac -b:a 192k -y "{current_video_path}"'
+            subprocess.run(cmd, shell=True, check=True)
+            current_video = current_video_path
     finally:
+        cmd = f'ffmpeg -i "{current_video}" -i "{mp3}" -map 0:v -map 1:a -c:v copy -c:a aac -shortest "{out_path}" -y'
+        subprocess.run(cmd, shell=True, check=True)
         shutil.rmtree(tmp_folder, ignore_errors=True)
 
 
 def _save_ai_image(url: str, tmp_folder: str) -> str:
     # 使用 datetime 获取当前时间并格式化
     image_path = f'{tmp_folder}/{datetime.now().strftime("%Y%m%d_%H%M%S_%f")}.png'
-    # 保存图片文件, 代理原因必须提前保存文件
-    try:
-        with requests.Session() as session:
-            session.trust_env = False
-            image_data = session.get(url).content
-            with open(image_path, 'wb') as f:
-                f.write(image_data)
-    except Exception as e:
-        print(f'保存图片失败: {e}')
-        return None
 
-    return image_path
+    # 最多重试3次下载图片
+    max_retries = 3
+    for retry in range(max_retries):
+        try:
+            with requests.Session() as session:
+                session.trust_env = False
+                response = session.get(url)
+                response.raise_for_status()  # 检查响应状态
+                image_data = response.content
+
+                # 检查图片数据是否有效
+                try:
+                    Image.open(io.BytesIO(image_data))
+                except:
+                    raise Exception("无效的图片数据")
+
+                # 保存图片文件
+                with open(image_path, 'wb') as f:
+                    f.write(image_data)
+                return image_path
+
+        except Exception as e:
+            print(f'第{retry+1}次下载图片失败: {e}')
+            if retry == max_retries - 1:
+                return None
+            time.sleep(1)  # 失败后等待1秒再重试
+
+    return None

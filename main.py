@@ -5,7 +5,7 @@ import os
 import time
 
 from config_parser import config
-from utils.video_utils import add_bgm, splicing_video, add_decoration
+from utils.video_utils import add_bgm, add_decoration, merge_transition_videos
 
 
 def get_ai_images(coze_token: str, coze_robot_id: str, flow_id: str, index: int, input_image: str = '') -> tuple[list[str], str, str]:
@@ -71,7 +71,7 @@ if __name__ == '__main__':
         os.makedirs(tmp_folder, exist_ok=True)
         # 合并图片
         tmp_splicing = f'{tmp_folder}/tmp_splicing.mp4'
-        splicing_video(images, tmp_splicing)
+        merge_transition_videos(images, tmp_splicing)
 
         # 添加画面装饰
         tmp_decoration = f'{tmp_folder}/decoration.mp4'
