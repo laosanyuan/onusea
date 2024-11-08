@@ -66,6 +66,9 @@ if __name__ == '__main__':
             try_times += 1
             if try_times > 10:
                 raise ValueError('连续调用coze接口失败')
+            
+        # 将前三张图片移动到列表尾部
+        images = images[3:] + images[:3]
 
         tmp_folder = 'tmp_main_folder'
         os.makedirs(tmp_folder, exist_ok=True)
